@@ -14,7 +14,7 @@ public class ConnectionDefinition : IConnectionDefinition
             AuthenticationType = ConnectionAuthenticationType.Undefined,
             ConnectionProperties = new List<ConnectionProperty>
             {
-                new(CredsNames.ApiKey)
+                new(CredNames.ApiKey)
                 {
                     DisplayName = "API Key",
                     Sensitive = true,
@@ -26,7 +26,7 @@ public class ConnectionDefinition : IConnectionDefinition
     public IEnumerable<AuthenticationCredentialsProvider> CreateAuthorizationCredentialsProviders(
          Dictionary<string, string> values)
     {
-        var apiKey = values.First(v => v.Key == CredsNames.ApiKey);
+        var apiKey = values.First(v => v.Key == CredNames.ApiKey);
         yield return new AuthenticationCredentialsProvider(apiKey.Key, apiKey.Value);
     }
 }

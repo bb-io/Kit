@@ -33,6 +33,17 @@ public class FileManager : IFileManagementClient
         return Task.FromResult((Stream)stream);
     }
 
+    public FileReference SaveInputFile(string fileName, string content, string contentType)
+    {
+        File.WriteAllText(Path.Combine(_inputFolder, fileName), content, new UTF8Encoding(false));
+        return new FileReference { Name = fileName, ContentType = contentType };
+    }
+
+    public void CopyOutputToInput(FileReference reference)
+    {
+        File.Copy(Path.Combine(_outputFolder, reference.Name), Path.Combine(_inputFolder, reference.Name), overwrite: true);
+    }
+
     public string ReadOutputAsString(FileReference reference)
     {
         var path = Path.Combine(_outputFolder, reference.Name);

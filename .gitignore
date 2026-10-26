@@ -385,6 +385,7 @@ Kit-DevLab-*.zip
 # Generated localized broadcast integration test files
 Tests.Kit/TestFiles/Input/broadcast-de-DE.html
 Tests.Kit/TestFiles/Input/broadcast-update-de.html
+Tests.Kit/TestFiles/Input/broadcast-source-de.html
 
 # Account-specific XLIFF integration test fixture
 Tests.Kit/TestFiles/Input/kit-broadcast-26340985.html.xlf

@@ -1,3 +1,4 @@
+using System.Net;
 using Apps.Kit.Api;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Connections;
@@ -7,33 +8,26 @@ namespace Apps.Kit.Connections;
 
 public class ConnectionValidator : IConnectionValidator
 {
+    private static readonly HttpStatusCode[] InvalidConnectionStatusCodes =
+    [
+        HttpStatusCode.Unauthorized,
+        HttpStatusCode.NotFound
+    ];
+
     public async ValueTask<ConnectionValidationResponse> ValidateConnection(
         IEnumerable<AuthenticationCredentialsProvider> authenticationCredentialsProviders,
         CancellationToken cancellationToken)
     {
-        var credentials = authenticationCredentialsProviders.ToArray();
+        var request = new KitRequest("account", Method.Get, authenticationCredentialsProviders);
+        var response = await new KitClient().ExecuteAsync(request, cancellationToken);
 
-        try
+        if (!InvalidConnectionStatusCodes.Contains(response.StatusCode))
+            return new() { IsValid = true };
+
+        return new()
         {
-            var client = new KitClient();
-            var request = new KitRequest("subscribers", Method.Get, credentials);
-
-            request.AddQueryParameter("per_page", 1);
-
-            await client.ExecuteWithErrorHandling(request);
-
-            return new()
-            {
-                IsValid = true
-            };
-        }
-        catch (Exception ex)
-        {
-            return new()
-            {
-                IsValid = false,
-                Message = ex.Message
-            };
-        }
+            IsValid = false,
+            Message = KitClient.ExtractErrorMessage(response)
+        };
     }
 }

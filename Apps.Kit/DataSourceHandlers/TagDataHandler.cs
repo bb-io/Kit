@@ -1,8 +1,8 @@
+using Apps.Kit.Api;
+using Apps.Kit.Invocables;
+using Apps.Kit.Models.Dtos;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Apps.Kit.Invocables;
-using Apps.Kit.Api;
-using Apps.Kit.Models.Responses;
 using RestSharp;
 
 namespace Apps.Kit.DataSourceHandlers;
@@ -10,18 +10,14 @@ namespace Apps.Kit.DataSourceHandlers;
 public class TagDataHandler(InvocationContext invocationContext)
     : KitInvocable(invocationContext), IAsyncDataSourceItemHandler
 {
-    public async Task<IEnumerable<DataSourceItem>> GetDataAsync(
-        DataSourceContext context,
-        CancellationToken cancellationToken)
+    public async Task<IEnumerable<DataSourceItem>> GetDataAsync(DataSourceContext context, CancellationToken cancellationToken)
     {
-        var endpoint = "tags";
-        var request = new KitRequest(endpoint, Method.Get, Creds)
-            .AddQueryParameter("per_page", 1000);
+        var request = new KitRequest("tags", Method.Get, Creds);
+        var tags = await Client.Paginate<TagListDto, TagDto>(request);
 
-        var response =
-            await Client.ExecuteWithErrorHandling<GetTagsResponse>(request);
-
-        return response.Tags
+        return tags
+            .Where(tag => string.IsNullOrEmpty(context.SearchString)
+                || tag.Name.Contains(context.SearchString, StringComparison.OrdinalIgnoreCase))
             .Select(tag => new DataSourceItem(tag.Id, tag.Name));
     }
 }

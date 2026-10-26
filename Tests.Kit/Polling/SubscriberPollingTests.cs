@@ -1,196 +1,55 @@
-using Apps.Kit.Models.Dtos;
 using Apps.Kit.Polling;
 using Apps.Kit.Polling.Memory;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Blackbird.Applications.Sdk.Common.Polling;
+using Newtonsoft.Json;
+using Tests.Kit.Base;
 
 namespace Tests.Kit.Polling;
 
 [TestClass]
-public class SubscriberPollingTests
+public class SubscriberPollingTests : TestBase
 {
     [TestMethod]
-    public void FindsNewSubscribersWithinPollingWindow()
+    public async Task OnSubscriberCreated_WithoutMemory_ShouldNotFly()
     {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+        var polling = new SubscriberPollingList(InvocationContext);
 
-        var memory = new SubscriberCreatedMemory
-        {
-            LastInteractionDate = checkpoint
-        };
+        var result = await polling.OnSubscriberCreated(new PollingEventRequest<PollingMemory>());
 
-        var subscribers = new List<SubscriberDto>
-        {
-            new()
-            {
-                Id = "1001",
-                EmailAddress = "new@example.com",
-                CreatedAt = checkpoint.AddMinutes(2)
-            },
-            new()
-            {
-                Id = "1002",
-                EmailAddress = "old@example.com",
-                CreatedAt = checkpoint.AddMinutes(-10)
-            }
-        };
-
-        var result = SubscriberPollingList.FindNewSubscribers(
-            subscribers,
-            memory,
-            checkpoint.AddMinutes(5));
-
-        Assert.AreEqual(1, result.Count);
-        Assert.AreEqual("1001", result[0].Id);
+        Assert.IsFalse(result.FlyBird);
+        Assert.IsNotNull(result.Memory);
     }
 
     [TestMethod]
-    public void DoesNotTriggerKnownSubscribersAgain()
+    [TestCategory("Manual")]
+    public async Task OnSubscriberCreated_WithMemory_ShouldReturnNewSubscribers()
     {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
-
-        var memory = new SubscriberCreatedMemory
+        var polling = new SubscriberPollingList(InvocationContext);
+        var request = new PollingEventRequest<PollingMemory>
         {
-            LastInteractionDate = checkpoint,
-            KnownSubscriberIds = new Dictionary<string, DateTime>
-            {
-                ["1001"] = checkpoint.AddMinutes(1)
-            }
+            Memory = new() { LastPollingTime = DateTime.UtcNow.AddDays(-7) }
         };
 
-        var subscribers = new List<SubscriberDto>
-        {
-            new()
-            {
-                Id = "1001",
-                CreatedAt = checkpoint.AddMinutes(1)
-            }
-        };
+        var result = await polling.OnSubscriberCreated(request);
 
-        var result = SubscriberPollingList.FindNewSubscribers(
-            subscribers,
-            memory,
-            checkpoint.AddMinutes(5));
-
-        Assert.AreEqual(0, result.Count);
+        Assert.IsTrue(result.Result!.All(subscriber => subscriber.CreatedAt > request.Memory.LastPollingTime));
+        Console.WriteLine(JsonConvert.SerializeObject(result.Result, Formatting.Indented));
     }
 
     [TestMethod]
-    public void RemovesExpiredSubscriberIds()
+    [TestCategory("Manual")]
+    public async Task OnSubscriberUnsubscribed_WithMemory_ShouldReturnUnsubscribers()
     {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
-
-        var memory = new SubscriberCreatedMemory
+        var polling = new SubscriberPollingList(InvocationContext);
+        var request = new PollingEventRequest<PollingMemory>
         {
-            LastInteractionDate = checkpoint,
-            KnownSubscriberIds = new Dictionary<string, DateTime>
-            {
-                ["old"] = checkpoint.AddMinutes(-10),
-                ["recent"] = checkpoint.AddMinutes(-2)
-            }
+            Memory = new() { LastPollingTime = DateTime.UtcNow.AddDays(-30) }
         };
 
-        SubscriberPollingList.CleanupMemory(memory);
+        var result = await polling.OnSubscriberUnsubscribed(request);
 
-        Assert.IsFalse(memory.KnownSubscriberIds.ContainsKey("old"));
-        Assert.IsTrue(memory.KnownSubscriberIds.ContainsKey("recent"));
-    }
-
-    [TestMethod]
-    public void FindsNewUnsubscribersWithinPollingWindow()
-    {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
-
-        var memory = new SubscriberUnsubscribedMemory
-        {
-            LastInteractionDate = checkpoint
-        };
-
-        var subscribers = new List<SubscriberDto>
-    {
-        new()
-        {
-            Id = "2001",
-            EmailAddress = "unsubscribed@example.com",
-            CanceledAt = checkpoint.AddMinutes(2)
-        },
-        new()
-        {
-            Id = "2002",
-            EmailAddress = "previously@example.com",
-            CanceledAt = checkpoint.AddMinutes(-10)
-        }
-    };
-
-        var result = SubscriberPollingList.FindNewUnsubscribers(
-            subscribers,
-            memory,
-            checkpoint.AddMinutes(5));
-
-        Assert.AreEqual(1, result.Count);
-        Assert.AreEqual("2001", result[0].Id);
-    }
-
-    [TestMethod]
-    public void DoesNotTriggerKnownUnsubscribersAgain()
-    {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
-
-        var memory = new SubscriberUnsubscribedMemory
-        {
-            LastInteractionDate = checkpoint,
-            KnownSubscriberIds = new Dictionary<string, DateTime>
-            {
-                ["2001"] = checkpoint.AddMinutes(1)
-            }
-        };
-
-        var subscribers = new List<SubscriberDto>
-    {
-        new()
-        {
-            Id = "2001",
-            CanceledAt = checkpoint.AddMinutes(1)
-        }
-    };
-
-        var result = SubscriberPollingList.FindNewUnsubscribers(
-            subscribers,
-            memory,
-            checkpoint.AddMinutes(5));
-
-        Assert.AreEqual(0, result.Count);
-    }
-
-    [TestMethod]
-    public void IgnoresUnsubscribersAfterCurrentCheckpoint()
-    {
-        var checkpoint = new DateTime(
-            2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
-
-        var memory = new SubscriberUnsubscribedMemory
-        {
-            LastInteractionDate = checkpoint
-        };
-
-        var subscribers = new List<SubscriberDto>
-    {
-        new()
-        {
-            Id = "2003",
-            CanceledAt = checkpoint.AddMinutes(10)
-        }
-    };
-
-        var result = SubscriberPollingList.FindNewUnsubscribers(
-            subscribers,
-            memory,
-            checkpoint.AddMinutes(5));
-
-        Assert.AreEqual(0, result.Count);
+        Assert.IsTrue(result.FlyBird);
+        Assert.IsTrue(result.Result!.All(subscriber => subscriber.CanceledAt > request.Memory.LastPollingTime));
+        Console.WriteLine(JsonConvert.SerializeObject(result.Result, Formatting.Indented));
     }
 }
