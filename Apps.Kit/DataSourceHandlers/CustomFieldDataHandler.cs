@@ -1,8 +1,8 @@
+using Apps.Kit.Api;
+using Apps.Kit.Invocables;
+using Apps.Kit.Models.Dtos;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Apps.Kit.Invocables;
-using Apps.Kit.Api;
-using Apps.Kit.Models.Responses;
 using RestSharp;
 
 namespace Apps.Kit.DataSourceHandlers;
@@ -10,18 +10,14 @@ namespace Apps.Kit.DataSourceHandlers;
 public class CustomFieldDataHandler(InvocationContext invocationContext)
     : KitInvocable(invocationContext), IAsyncDataSourceItemHandler
 {
-    public async Task<IEnumerable<DataSourceItem>> GetDataAsync(
-        DataSourceContext context,
-        CancellationToken cancellationToken)
+    public async Task<IEnumerable<DataSourceItem>> GetDataAsync(DataSourceContext context, CancellationToken cancellationToken)
     {
-        var endpoint = "custom_fields";
-        var request = new KitRequest(endpoint, Method.Get, Creds)
-            .AddQueryParameter("per_page", 1000);
+        var request = new KitRequest("custom_fields", Method.Get, Creds);
+        var customFields = await Client.Paginate<CustomFieldListDto, CustomFieldDto>(request);
 
-        var response =
-            await Client.ExecuteWithErrorHandling<GetCustomFieldsResponse>(request);
-
-        return response.CustomFields
+        return customFields
+            .Where(field => string.IsNullOrEmpty(context.SearchString)
+                || field.Label.Contains(context.SearchString, StringComparison.OrdinalIgnoreCase))
             .Select(field => new DataSourceItem(field.Key, field.Label));
     }
 }

@@ -1,13 +1,13 @@
-using Apps.Kit.DataSourceHandlers.EnumDataHandlers;
+using Apps.Kit.DataSourceHandlers.StaticDataHandlers;
 using Blackbird.Applications.Sdk.Common;
-using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
 
 namespace Apps.Kit.Models.Requests;
 
 public class SearchBroadcastsRequest
 {
-    [Display("Status"), StaticDataSource(typeof(BroadcastStatusDataHandler))]
+    [Display("Status")]
+    [StaticDataSource(typeof(BroadcastStatusDataHandler))]
     public string? Status { get; set; }
 
     [Display("Sent after")]

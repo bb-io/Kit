@@ -1,8 +1,12 @@
-# Kit
+# Blackbird.io Kit
 
-Kit is an email marketing platform for managing subscribers, broadcasts, and audience communications.
+Blackbird is the new automation backbone for the language technology industry. Blackbird provides enterprise-scale automation and orchestration with a simple no-code/low-code platform. Blackbird enables ambitious organizations to identify, vet and automate as many processes as possible. Not just localization workflows, but any business and IT process. This repository represents an application that is deployable on Blackbird and usable inside the workflow editor.
 
-The Blackbird Kit app enables you to automate subscriber management, create and update email broadcasts, and build multilingual email workflows using Blackbird and Blacklake.
+## Introduction
+
+<!-- begin docs -->
+
+Kit is an email marketing platform for managing subscribers, broadcasts, and audience communications. The Blackbird Kit app enables you to automate subscriber management, create and update email broadcasts, and build multilingual email workflows using Blackbird and Blacklake.
 
 ## Before setting up
 
@@ -26,63 +30,62 @@ Your API key is treated as a sensitive connection credential.
 
 ## Actions
 
-### Subscribers
-
-Manage subscriber records in Kit, including creating, retrieving, updating, and searching subscribers.
-
 ### Broadcasts
 
-- **Search broadcasts.** Find existing broadcasts in Kit.
-- **Get broadcast.** Retrieve broadcast details using its ID.
-- **Create broadcast.** Create a broadcast using HTML content.
-- **Update broadcast.** Update an existing broadcast.
-- **Delete broadcast.** Delete a broadcast.
-- **Download broadcast.** Download broadcast content as interoperable HTML.
-- **Create localized broadcast.** Create a new draft broadcast from translated HTML or XLIFF.
-- **Update localized broadcast.** Update an existing localized draft using translated HTML or XLIFF.
+- **Search broadcasts** finds broadcasts by status and send date.
+- **Get broadcast** returns broadcast details by ID.
+- **Create broadcast** creates a new draft broadcast from an HTML file.
+- **Download broadcast** downloads broadcast content as interoperable HTML. The subject and preview text are included as translatable fields.
+- **Upload broadcast** uploads a translated HTML or XLIFF file. When **Localized broadcast ID** is empty, a new draft is created. Otherwise the specified localized draft is updated.
+- **Delete broadcast** deletes a broadcast.
+- **Update broadcast** updates an existing broadcast from an HTML file.
 
-### Multilingual broadcast workflows
+### Subscribers
 
-The Kit app supports multilingual email workflows using Blackbird's interoperable content format.
+- **Search subscribers** finds subscribers by status, email address and dates.
+- **Get subscriber** returns subscriber details by ID.
+- **Get subscriber tags** returns all tags of a subscriber.
+- **Get subscriber stats** returns email engagement statistics of a subscriber.
+- **Create subscriber** creates a subscriber or updates an existing subscriber with the same email address.
+- **Add tag to subscriber** applies a tag to a subscriber.
+- **Delete tag from subscriber** removes a tag from a subscriber.
+- **Update subscriber** updates the email address or first name of a subscriber.
+- **Update subscriber custom field** updates a custom field value of a subscriber.
+- **Unsubscribe subscriber** unsubscribes a subscriber from all emails.
+
+## Multilingual broadcast workflows
 
 A typical workflow is:
 
-1. Download an existing Kit broadcast.
-2. Convert its content to XLIFF and translate it using a translation provider.
-3. Create a localized broadcast as a separate draft in Kit.
-4. Optionally send the translated content to Blacklake for multilingual content tracking.
-5. Update the existing localized draft when further translations or revisions are required.
+1. **Download broadcast** to get the source broadcast as interoperable HTML.
+2. Translate the file with a translation provider.
+3. **Upload broadcast** without a localized broadcast ID to create a localized draft in Kit.
+4. Optionally send the returned file to Blacklake for multilingual content tracking.
+5. **Upload broadcast** with the localized broadcast ID for subsequent revisions.
 
-The downloadable content includes metadata identifying the source broadcast and its system. Broadcast subjects and preview text are included as translatable content alongside the email body.
+Uploads never overwrite the source broadcast: the localized broadcast ID must differ from the source broadcast ID, and only drafts can be updated. For XLIFF files, the source and target references are validated as well. The returned file contains the Kit target broadcast reference for subsequent Blackbird and Blacklake steps.
 
-When creating a localized broadcast, Blackbird creates a new draft rather than overwriting the original broadcast.
-
-When updating a localized broadcast, the app uses the specified localized broadcast ID and only permits updates to drafts. For XLIFF files, it validates source and target references to help prevent accidental updates to the original broadcast.
-
-Localized actions return updated content metadata, including the Kit target broadcast reference, for use in subsequent Blackbird and Blacklake workflows.
-
-**Important:** Creating a localized broadcast creates a new Kit record. Use **Update localized broadcast** with the existing localized broadcast ID for subsequent revisions to avoid creating unnecessary duplicate drafts.
+**Important:** Uploading without a localized broadcast ID always creates a new Kit draft. Use the existing localized broadcast ID for subsequent revisions to avoid duplicate drafts.
 
 ## Events
 
 ### Broadcasts
 
-- **On broadcast published.** Poll Kit for newly published broadcasts.
+- **On broadcast published** triggers when a broadcast is published to the web.
 
 ### Subscribers
 
-- **On subscriber created.** Poll for newly created subscribers.
-- **On subscriber unsubscribed.** Poll for subscriber unsubscribe activity.
-
-These events can be used to initiate automated Birds, including audience synchronization, notifications, and multilingual content workflows.
+- **On subscriber created** triggers when a new subscriber is created.
+- **On subscriber unsubscribed** triggers when a subscriber unsubscribes.
 
 ## Additional notes
 
-- Kit broadcasts created through localization workflows remain drafts until published in Kit.
-- The original broadcast and localized broadcasts have different Kit IDs.
-- Broadcast HTML is processed for translation interoperability while retaining the underlying email content.
+- Localized broadcasts remain drafts until published in Kit.
+- The source broadcast and localized broadcasts have different Kit IDs.
 - API availability, permissions, and rate limits are subject to Kit's platform restrictions.
 
 ## Feedback
 
-If you encounter an issue or have a suggestion for improving the Kit integration, contact the Blackbird team through the established support channels.
+Do you want to use this app or do you have feedback on our implementation? Reach out to us using the [established channels](https://www.blackbird.io/) or create an issue.
+
+<!-- end docs -->

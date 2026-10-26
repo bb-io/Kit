@@ -1,5 +1,5 @@
 using Apps.Kit.Helpers;
-using Apps.Kit.Models.Dtos;
+using Apps.Kit.Models.Responses;
 using HtmlAgilityPack;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -11,7 +11,7 @@ public class BroadcastHtmlHelperTests
     [TestMethod]
     public void PrepareHtml_AddsBlackbirdMetadata()
     {
-        var broadcast = new BroadcastDto
+        var broadcast = new BroadcastResponse
         {
             Id = "12345",
             Subject = "October Newsletter",
@@ -52,7 +52,7 @@ public class BroadcastHtmlHelperTests
     [TestMethod]
     public void PrepareHtml_HandlesHtmlFragments()
     {
-        var broadcast = new BroadcastDto
+        var broadcast = new BroadcastResponse
         {
             Id = "67890",
             Subject = "Test Broadcast",
@@ -82,7 +82,7 @@ public class BroadcastHtmlHelperTests
     [TestMethod]
     public void PrepareHtml_DoesNotDuplicateMetadata()
     {
-        var broadcast = new BroadcastDto
+        var broadcast = new BroadcastResponse
         {
             Id = "99999",
             Subject = "Updated Newsletter",
@@ -124,7 +124,7 @@ public class BroadcastHtmlHelperTests
     public void PrepareHtml_IncludesTranslatableSubjectAndPreview()
     {
         // Arrange
-        var broadcast = new BroadcastDto
+        var broadcast = new BroadcastResponse
         {
             Id = "12345",
             Subject = "October Newsletter",
@@ -214,7 +214,7 @@ public class BroadcastHtmlHelperTests
     public void BroadcastHtml_RoundTripPreservesContentAndSourceId()
     {
         // Arrange: original English broadcast.
-        var broadcast = new BroadcastDto
+        var broadcast = new BroadcastResponse
         {
             Id = "12345",
             Subject = "October Newsletter",

@@ -11,7 +11,7 @@ public class KitRequest(string resource, Method method, IEnumerable<Authenticati
 {
     protected override void AddAuth(IEnumerable<AuthenticationCredentialsProvider> creds)
     {
-        var token = creds.Get(CredsNames.ApiKey).Value;
+        var token = creds.Get(CredNames.ApiKey).Value;
         this.AddHeader("X-Kit-Api-Key", token);
     }
 }

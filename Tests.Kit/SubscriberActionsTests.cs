@@ -1,214 +1,63 @@
 using Apps.Kit.Actions;
+using Apps.Kit.Constants;
+using Apps.Kit.DataSourceHandlers;
 using Apps.Kit.Models.Requests;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 using Newtonsoft.Json;
 using Tests.Kit.Base;
-using Apps.Kit.DataSourceHandlers;
-using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Tests.Kit;
 
 [TestClass]
 public class SubscriberActionsTests : TestBase
 {
-    [TestMethod]
-    public async Task GetSubscriber_ValidId_ShouldReturnSubscriber()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-        var request = new SubscriberRequest
-        {
-            SubscriberId = "4309128168"
-        };
-
-        var result = await subscriberActions.GetSubscriber(request);
-
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.SubscriberId, result.Id);
-        Assert.IsFalse(string.IsNullOrEmpty(result.EmailAddress));
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
-    }
+    private const string SubscriberId = "4309128168";
+    private const string TagId = "23259003";
 
     [TestMethod]
     public async Task SearchSubscribers_ShouldReturnSubscribers()
     {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
+        var actions = new SubscriberActions(InvocationContext);
         var request = new SearchSubscribersRequest
         {
-            Status = "active",
+            Status = SubscriberStates.Active,
             EmailAddress = "tobetranslated01@gmail.com",
             CreatedAfter = new DateTime(2026, 9, 15)
         };
 
-        var result = await subscriberActions.SearchSubscribers(request);
+        var result = await actions.SearchSubscribers(request);
 
-        Assert.IsNotNull(result.Subscribers);
         Assert.IsTrue(result.Subscribers.Count > 0);
-        Assert.AreEqual(
-            request.EmailAddress,
-            result.Subscribers.First().EmailAddress);
-        Assert.IsNotNull(result.Pagination);
-        Console.WriteLine($"Has next page: {result.Pagination.HasNextPage}");
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
-        Console.WriteLine($"Total subscribers returned: {result.Subscribers.Count}");
-    }
-
-    [TestMethod]
-    public async Task CreateSubscriber_ValidInput_ShouldCreateSubscriber()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new CreateSubscriberRequest
-        {
-            EmailAddress = "danielmilczarski@aol.com",
-            FirstName = "Blackbird Test Updated",
-            State = "inactive"
-        };
-
-        var result = await subscriberActions.CreateSubscriber(request);
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.EmailAddress, result.EmailAddress);
-
+        Assert.AreEqual(request.EmailAddress, result.Subscribers.First().EmailAddress);
         Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
     }
 
     [TestMethod]
-    public async Task UpdateSubscriber_ValidInput_ShouldUpdateSubscriber()
+    public async Task GetSubscriber_ValidId_ShouldReturnSubscriber()
     {
-        var subscriberActions = new SubscriberActions(InvocationContext);
+        var actions = new SubscriberActions(InvocationContext);
 
-        var request = new UpdateSubscriberRequest
-        {
-            SubscriberId = "4309128168",
-            EmailAddress = "danielmilczarski@aol.com",
-            FirstName = "Blackbird Test Updated"
-        };
+        var result = await actions.GetSubscriber(new SubscriberRequest { SubscriberId = SubscriberId });
 
-        var result = await subscriberActions.UpdateSubscriber(request);
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.SubscriberId, result.Id);
-        Assert.AreEqual(request.EmailAddress, result.EmailAddress);
-        Assert.AreEqual(request.FirstName, result.FirstName);
-
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
-    }
-
-    [TestMethod]
-    public async Task UpdateSubscriber_WithoutEmail_ShouldUpdateSubscriber()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new UpdateSubscriberRequest
-        {
-            SubscriberId = "4309128168",
-            FirstName = "Blackbird No Email Test"
-        };
-
-        var result = await subscriberActions.UpdateSubscriber(request);
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.SubscriberId, result.Id);
-        Assert.AreEqual(request.FirstName, result.FirstName);
+        Assert.AreEqual(SubscriberId, result.Id);
         Assert.IsFalse(string.IsNullOrEmpty(result.EmailAddress));
+    }
 
+    [TestMethod]
+    public async Task GetSubscriberTags_ValidInput_ShouldReturnTags()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+
+        var result = await actions.GetSubscriberTags(new SubscriberRequest { SubscriberId = "4102640914" });
+
+        Assert.IsNotNull(result.Tags);
         Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
-    }
-
-    [TestMethod]
-    public async Task CustomFieldDataHandler_ShouldReturnCustomFields()
-    {
-        var handler = new CustomFieldDataHandler(InvocationContext);
-
-        var result = await handler.GetDataAsync(
-            new DataSourceContext(),
-            CancellationToken.None);
-
-        var fields = result.ToList();
-
-        Assert.IsTrue(fields.Count > 0);
-
-        foreach (var field in fields)
-        {
-            Console.WriteLine($"{field.DisplayName} -> {field.Value}");
-        }
-    }
-
-    [TestMethod]
-    public async Task UpdateSubscriberCustomField_ValidInput_ShouldUpdateCustomField()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new UpdateSubscriberCustomFieldRequest
-        {
-            SubscriberId = "4309128168",
-            CustomField = "role",
-            Value = "Solutions",
-        };
-
-        var result = await subscriberActions.UpdateSubscriberCustomField(request);
-
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.SubscriberId, result.Id);
-        Assert.IsNotNull(result.Fields);
-        Assert.AreEqual(
-            request.Value,
-            result.Fields[request.CustomField]);
-
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
-    }
-
-    [TestMethod]
-    public async Task UnsubscribeSubscriber_ValidInput_ShouldSucceed()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new SubscriberRequest
-        {
-            SubscriberId = "4309121579"
-        };
-
-        await subscriberActions.UnsubscribeSubscriber(request);
-    }
-
-    [TestMethod]
-    public async Task TagDataHandler_ShouldReturnTags()
-    {
-        var handler = new TagDataHandler(InvocationContext);
-
-        var result = await handler.GetDataAsync(
-            new DataSourceContext(),
-            CancellationToken.None);
-
-        var tags = result.ToList();
-
-        Assert.IsTrue(tags.Count > 0);
-
-        foreach (var tag in tags)
-        {
-            Console.WriteLine($"{tag.DisplayName} -> {tag.Value}");
-        }
-    }
-
-    [TestMethod]
-    public async Task TagSubscriber_ValidInput_ShouldSucceed()
-    {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new TagSubscriberRequest
-        {
-            SubscriberId = "4309128168",
-            TagId = "23259003"
-        };
-
-        var result = await subscriberActions.TagSubscriber(request);
-
-        Assert.IsNotNull(result);
-        Assert.AreEqual(request.SubscriberId, result.Id);
     }
 
     [TestMethod]
     public async Task GetSubscriberStats_ValidInput_ShouldReturnStats()
     {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
+        var actions = new SubscriberActions(InvocationContext);
         var request = new GetSubscriberStatsRequest
         {
             SubscriberId = "4102640914",
@@ -216,50 +65,117 @@ public class SubscriberActionsTests : TestBase
             SentBefore = new DateTime(2026, 10, 3)
         };
 
-        var result = await subscriberActions.GetSubscriberStats(request);
+        var result = await actions.GetSubscriberStats(request);
 
-        Assert.IsNotNull(result);
         Assert.AreEqual(request.SubscriberId, result.Id);
         Assert.IsNotNull(result.Stats);
-
-        Console.WriteLine($"Sent: {result.Stats.Sent}");
-        Console.WriteLine($"Opened: {result.Stats.Opened}");
-        Console.WriteLine($"Clicked: {result.Stats.Clicked}");
-        Console.WriteLine($"Open rate: {result.Stats.OpenRate}");
-        Console.WriteLine($"Click rate: {result.Stats.ClickRate}");
     }
 
     [TestMethod]
-    public async Task GetSubscriberTags_ValidInput_ShouldReturnTags()
+    public async Task CreateSubscriber_ValidInput_ShouldCreateSubscriber()
     {
-        var subscriberActions = new SubscriberActions(InvocationContext);
-
-        var request = new SubscriberRequest
+        var actions = new SubscriberActions(InvocationContext);
+        var request = new CreateSubscriberRequest
         {
-            SubscriberId = "4102640914"
+            EmailAddress = "danielmilczarski@aol.com",
+            FirstName = "Blackbird Test Updated",
+            State = SubscriberStates.Inactive
         };
 
-        var result = await subscriberActions.GetSubscriberTags(request);
+        var result = await actions.CreateSubscriber(request);
 
-        Assert.IsNotNull(result);
-
-        foreach (var tag in result)
-        {
-            Console.WriteLine($"{tag.Id}: {tag.Name} - Tagged at: {tag.TaggedAt}");
-        }
+        Assert.AreEqual(request.EmailAddress, result.EmailAddress);
     }
 
     [TestMethod]
-    public async Task RemoveTagFromSubscriber_ValidInput_ShouldSucceed()
+    public async Task AddTagToSubscriber_ValidInput_ShouldSucceed()
     {
-        var subscriberActions = new SubscriberActions(InvocationContext);
+        var actions = new SubscriberActions(InvocationContext);
 
-        var request = new TagSubscriberRequest
+        var result = await actions.AddTagToSubscriber(new TagSubscriberRequest { SubscriberId = SubscriberId, TagId = TagId });
+
+        Assert.AreEqual(SubscriberId, result.Id);
+    }
+
+    [TestMethod]
+    public async Task DeleteTagFromSubscriber_ValidInput_ShouldSucceed()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+
+        await actions.DeleteTagFromSubscriber(new TagSubscriberRequest { SubscriberId = SubscriberId, TagId = TagId });
+    }
+
+    [TestMethod]
+    public async Task UpdateSubscriber_ValidInput_ShouldUpdateSubscriber()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+        var request = new UpdateSubscriberRequest
         {
-            SubscriberId = "4309128168",
-            TagId = "23259003"
+            SubscriberId = SubscriberId,
+            EmailAddress = "danielmilczarski@aol.com",
+            FirstName = "Blackbird Test Updated"
         };
 
-        await subscriberActions.RemoveTagFromSubscriber(request);
+        var result = await actions.UpdateSubscriber(request);
+
+        Assert.AreEqual(request.EmailAddress, result.EmailAddress);
+        Assert.AreEqual(request.FirstName, result.FirstName);
+    }
+
+    [TestMethod]
+    public async Task UpdateSubscriber_WithoutEmail_ShouldKeepEmail()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+        var request = new UpdateSubscriberRequest { SubscriberId = SubscriberId, FirstName = "Blackbird No Email Test" };
+
+        var result = await actions.UpdateSubscriber(request);
+
+        Assert.AreEqual(request.FirstName, result.FirstName);
+        Assert.IsFalse(string.IsNullOrEmpty(result.EmailAddress));
+    }
+
+    [TestMethod]
+    public async Task UpdateSubscriberCustomField_ValidInput_ShouldUpdateCustomField()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+        var request = new UpdateSubscriberCustomFieldRequest
+        {
+            SubscriberId = SubscriberId,
+            CustomField = "role",
+            Value = "Solutions"
+        };
+
+        var result = await actions.UpdateSubscriberCustomField(request);
+
+        Assert.IsNotNull(result.Fields);
+        Assert.AreEqual(request.Value, result.Fields[request.CustomField]);
+    }
+
+    [TestMethod]
+    public async Task UnsubscribeSubscriber_ValidInput_ShouldSucceed()
+    {
+        var actions = new SubscriberActions(InvocationContext);
+
+        await actions.UnsubscribeSubscriber(new SubscriberRequest { SubscriberId = "4309121579" });
+    }
+
+    [TestMethod]
+    public async Task CustomFieldDataHandler_ShouldReturnCustomFields()
+    {
+        var handler = new CustomFieldDataHandler(InvocationContext);
+
+        var result = (await handler.GetDataAsync(new DataSourceContext(), CancellationToken.None)).ToList();
+
+        Assert.IsTrue(result.Count > 0);
+    }
+
+    [TestMethod]
+    public async Task TagDataHandler_ShouldReturnTags()
+    {
+        var handler = new TagDataHandler(InvocationContext);
+
+        var result = (await handler.GetDataAsync(new DataSourceContext(), CancellationToken.None)).ToList();
+
+        Assert.IsTrue(result.Count > 0);
     }
 }

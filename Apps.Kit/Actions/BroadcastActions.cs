@@ -1,574 +1,194 @@
+using System.Net.Mime;
 using Apps.Kit.Api;
+using Apps.Kit.Constants;
+using Apps.Kit.Extensions;
+using Apps.Kit.Helpers;
 using Apps.Kit.Invocables;
+using Apps.Kit.Models.Dtos;
+using Apps.Kit.Models.Html;
 using Apps.Kit.Models.Requests;
 using Apps.Kit.Models.Responses;
-using Apps.Kit.Models.Dtos;
-using Apps.Kit.Helpers;
-using Blackbird.Filters.Transformations;
-using Blackbird.Applications.Sdk.Utils.Extensions.Files;
-using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common;
+using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
-using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Invocation;
+using Blackbird.Applications.Sdk.Utils.Extensions.Http;
+using Blackbird.Applications.SDK.Blueprints;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using RestSharp;
-using System.Text;
 
 namespace Apps.Kit.Actions;
 
 [ActionList("Broadcasts")]
-public class BroadcastActions(
-    InvocationContext invocationContext,
-    IFileManagementClient fileManagementClient)
+public class BroadcastActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : KitInvocable(invocationContext)
 {
-    [Action("Get a broadcast",
-           Description = "Get details about a broadcast")]
-    public async Task<BroadcastDto> GetBroadcast([ActionParameter] BroadcastRequest input)
+    [Action("Search broadcasts", Description = "Search Kit broadcasts by status and send date")]
+    public async Task<SearchBroadcastsResponse> SearchBroadcasts([ActionParameter] SearchBroadcastsRequest input)
     {
-        var endpoint = $"broadcasts/{input.BroadcastId}";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
+        var request = new KitRequest("broadcasts", Method.Get, Creds)
+            .AddQueryParameter("slim", true)
+            .AddOptionalQueryParameter("status", input.Status)
+            .AddOptionalDateQueryParameter("sent_after", input.SentAfter)
+            .AddOptionalDateQueryParameter("sent_before", input.SentBefore);
 
-        var response = await Client.ExecuteWithErrorHandling<GetBroadcastResponse>(request);
+        var broadcasts = await Client.Paginate<BroadcastListDto, BroadcastResponse>(request);
 
-        if (response.Broadcast is null)
-        {
-            throw new PluginApplicationException("Kit returned an empty broadcast response.");
-        }
-
-        return response.Broadcast;
+        return new() { Broadcasts = broadcasts };
     }
 
-    [Action("Create a broadcast",
-    Description = "Create a new draft broadcast in Kit")]
-    public async Task<BroadcastDto> CreateBroadcast(
-    [ActionParameter] CreateBroadcastRequest input)
-    {
-        var html = await ReadHtmlFile(input.Content);
+    [Action("Get broadcast", Description = "Get details of a Kit broadcast")]
+    public Task<BroadcastResponse> GetBroadcast([ActionParameter] BroadcastRequest input) =>
+        GetBroadcastById(input.BroadcastId);
 
-        var dto = new CreateBroadcastDto
+    [Action("Create broadcast", Description = "Create a new draft broadcast in Kit from an HTML file")]
+    public async Task<BroadcastResponse> CreateBroadcast([ActionParameter] CreateBroadcastRequest input)
+    {
+        var payload = new BroadcastPayloadDto
         {
             Subject = input.Subject,
-            Content = html,
+            Content = await fileManagementClient.DownloadStringAsync(input.Content),
             PreviewText = input.PreviewText,
             Description = input.Description
         };
 
-        var request = new KitRequest("broadcasts", Method.Post, Creds);
-        request.AddJsonBody(dto);
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetBroadcastResponse>(request);
-
-        if (response.Broadcast is null)
-        {
-            throw new PluginApplicationException(
-                "Kit returned an empty broadcast response.");
-        }
-
-        return response.Broadcast;
+        return await PostBroadcast(payload);
     }
 
-
-    [Action("Create localized broadcast",
-        Description = "Create a new Kit draft from translated HTML or XLIFF")]
-    public async Task<CreateLocalizedBroadcastResponse> CreateLocalizedBroadcast(
-        [ActionParameter] CreateLocalizedBroadcastRequest input)
+    [BlueprintActionDefinition(BlueprintAction.DownloadContent)]
+    [Action("Download broadcast", Description = "Download Kit broadcast content as HTML with Blackbird interoperability metadata")]
+    public async Task<DownloadBroadcastResponse> DownloadBroadcast([ActionParameter] DownloadBroadcastRequest input)
     {
-        if (string.IsNullOrWhiteSpace(input.TargetLanguage))
-        {
-            throw new PluginApplicationException(
-                "Target language is required.");
-        }
+        var broadcast = await GetBroadcastById(input.ContentId);
+        var html = BroadcastHtmlHelper.PrepareHtml(broadcast, input.SourceLanguage);
+        var file = await fileManagementClient.UploadStringAsync(html, MediaTypeNames.Text.Html, $"broadcast-{broadcast.Id}.html");
 
-        // Read and process the translated HTML.
-        var interoperableContent = await ReadInteroperableHtmlFile(input.Content);
-
-        var processed = BroadcastHtmlHelper.ProcessTranslatedHtml(
-            interoperableContent.Html);
-
-        // Ensure the translated file identifies its source.
-        if (string.IsNullOrWhiteSpace(processed.SourceBroadcastId))
-        {
-            throw new PluginApplicationException(
-                "The translated file is missing the original broadcast ID.");
-        }
-
-        if (string.IsNullOrWhiteSpace(processed.Subject))
-        {
-            throw new PluginApplicationException(
-                "The translated file is missing the broadcast subject.");
-        }
-
-        // Retrieve the original broadcast to preserve its description.
-        var original = await GetBroadcast(new BroadcastRequest
-        {
-            BroadcastId = processed.SourceBroadcastId
-        });
-
-        // Identify the localized version in Kit.
-        var description = string.IsNullOrWhiteSpace(original.Description)
-            ? $"[{input.TargetLanguage}]"
-            : $"{original.Description} [{input.TargetLanguage}]";
-
-        // Create a new draft using Kit's existing API.
-        var dto = new CreateBroadcastDto
-        {
-            Subject = processed.Subject,
-            PreviewText = processed.PreviewText,
-            Description = description,
-            Content = processed.Html
-        };
-
-        var request = new KitRequest("broadcasts", Method.Post, Creds);
-        request.AddJsonBody(dto);
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetBroadcastResponse>(request);
-
-        if (response.Broadcast is null)
-        {
-            throw new PluginApplicationException(
-                "Kit returned an empty broadcast response.");
-        }
-
-
-        var createdBroadcast = response.Broadcast;
-
-        FileReference? outputContent = null;
-
-        var transformationResult = interoperableContent.TransformationResult;
-
-        if (transformationResult?.Success == true)
-        {
-            var transformation = transformationResult.Value;
-
-            // Associate the translated content with the newly created Kit draft.
-            transformation.TargetSystemReference.ContentId = createdBroadcast.Id;
-            transformation.TargetSystemReference.ContentName = createdBroadcast.Subject;
-            transformation.TargetSystemReference.SystemName = "Kit";
-            transformation.TargetSystemReference.SystemRef = "https://kit.com/";
-            transformation.TargetLanguage = input.TargetLanguage;
-
-            if (transformationResult.WasBilingual)
-            {
-                // Preserve the bilingual XLIFF and its updated metadata.
-                using var stream = transformation.ToStream();
-
-                outputContent = await fileManagementClient.UploadAsync(
-                    stream,
-                    "application/xliff+xml",
-                    transformation.BilingualFileName);
-            }
-            else
-            {
-                // Return the reconstructed target file with its system reference.
-                var targetResult = transformation.Target();
-
-                if (!targetResult.Success)
-                {
-                    throw new PluginApplicationException(
-                        $"Could not reconstruct localized content: {targetResult.Error}");
-                }
-
-                var target = targetResult.Value;
-                target.SystemReference = transformation.TargetSystemReference;
-
-                using var stream = target.ToStream();
-
-                outputContent = await fileManagementClient.UploadAsync(
-                    stream,
-                    target.OriginalMediaType,
-                    target.OriginalName);
-            }
-        }
-        else
-        {
-            // A regular HTML file has no transformation to preserve.
-            // Return the original input file for now.
-            outputContent = input.Content;
-        }
-
-        return new CreateLocalizedBroadcastResponse
-        {
-            Broadcast = createdBroadcast,
-            Content = outputContent,
-            TargetLanguage = input.TargetLanguage
-        };
+        return new() { Content = file };
     }
 
-    [Action("Update localized broadcast",
-        Description = "Update an existing Kit draft using translated HTML or XLIFF")]
-    public async Task<CreateLocalizedBroadcastResponse> UpdateLocalizedBroadcast(
-        [ActionParameter] UpdateLocalizedBroadcastRequest input)
+    [BlueprintActionDefinition(BlueprintAction.UploadContent)]
+    [Action("Upload broadcast", Description = "Upload translated HTML or XLIFF to Kit. Updates the specified localized draft or creates a new one")]
+    public async Task<UploadBroadcastResponse> UploadBroadcast([ActionParameter] UploadBroadcastRequest input)
     {
-        if (string.IsNullOrWhiteSpace(input.BroadcastId))
-            throw new PluginApplicationException(
-                "Localized broadcast ID is required.");
+        if (string.IsNullOrWhiteSpace(input.Locale))
+            throw new PluginMisconfigurationException("Target language is required.");
 
-        if (string.IsNullOrWhiteSpace(input.TargetLanguage))
-            throw new PluginApplicationException(
-                "Target language is required.");
+        var content = await InteroperableFileHelper.ReadAsync(fileManagementClient, input.Content);
+        var translated = BroadcastHtmlHelper.ProcessTranslatedHtml(content.Html);
+        ValidateTranslatedHtml(translated);
 
-        // Extract translated HTML while retaining XLIFF metadata.
-        var interoperableContent = await ReadInteroperableHtmlFile(input.Content);
+        var broadcast = string.IsNullOrWhiteSpace(input.ContentId)
+            ? await CreateLocalizedBroadcast(translated, input.Locale)
+            : await UpdateLocalizedBroadcast(input.ContentId, translated, content);
 
-        var processed = BroadcastHtmlHelper.ProcessTranslatedHtml(
-            interoperableContent.Html);
+        var file = await InteroperableFileHelper.UploadWithTargetReferenceAsync(
+            fileManagementClient,
+            content,
+            broadcast.Id,
+            broadcast.Subject,
+            input.Locale,
+            input.Content);
 
-        if (string.IsNullOrWhiteSpace(processed.SourceBroadcastId))
-            throw new PluginApplicationException(
-                "The translated file is missing the original broadcast ID.");
-
-
-        // Validate source and target identities before updating Kit.
-        var transformationResult = interoperableContent.TransformationResult;
-
-        if (transformationResult?.Success == true)
-        {
-            var sourceId =
-                transformationResult.Value.SourceSystemReference?.ContentId;
-
-            var targetId =
-                transformationResult.Value.TargetSystemReference?.ContentId;
-
-            if (string.IsNullOrWhiteSpace(sourceId))
-                throw new PluginApplicationException(
-                    "The XLIFF is missing the original source broadcast ID.");
-
-            // Never allow the original source broadcast to be overwritten.
-            if (string.Equals(
-                input.BroadcastId,
-                sourceId,
-                StringComparison.Ordinal))
-            {
-                throw new PluginApplicationException(
-                    "The localized broadcast ID cannot equal the source broadcast ID.");
-            }
-
-            // An existing XLIFF target must match the requested draft.
-            if (!string.IsNullOrWhiteSpace(targetId) &&
-                !string.Equals(
-                    input.BroadcastId,
-                    targetId,
-                    StringComparison.Ordinal))
-            {
-                throw new PluginApplicationException(
-                    "The XLIFF target broadcast ID does not match the requested draft.");
-            }
-        }
-        else
-        {
-            // For ordinary HTML, blackbird-ucid identifies the source.
-            if (string.Equals(
-                input.BroadcastId,
-                processed.SourceBroadcastId,
-                StringComparison.Ordinal))
-            {
-                throw new PluginApplicationException(
-                    "The localized broadcast ID cannot equal the source broadcast ID.");
-            }
-        }
-
-        // Verify the target exists and is editable.
-        var existing = await GetBroadcast(new BroadcastRequest
-        {
-            BroadcastId = input.BroadcastId
-        });
-
-        if (!string.Equals(
-            existing.Status,
-            "draft",
-            StringComparison.OrdinalIgnoreCase))
-        {
-            throw new PluginApplicationException(
-                "Only draft broadcasts can be updated.");
-        }
-
-        if (string.IsNullOrWhiteSpace(processed.Subject))
-            throw new PluginApplicationException(
-                "The translated file is missing the broadcast subject.");
-
-        // Preserve the existing description.
-        var dto = new UpdateBroadcastDto
-        {
-            Subject = processed.Subject,
-            PreviewText = processed.PreviewText,
-            Description = existing.Description,
-            Content = processed.Html
-        };
-
-        var request = new KitRequest(
-            $"broadcasts/{input.BroadcastId}",
-            Method.Put,
-            Creds);
-
-        request.AddJsonBody(dto);
-
-        var response = await Client.ExecuteWithErrorHandling<GetBroadcastResponse>(
-            request);
-
-        if (response.Broadcast is null)
-            throw new PluginApplicationException(
-                "Kit returned an empty broadcast response.");
-
-        var updatedBroadcast = response.Broadcast;
-
-        // Return the translated file with updated Blacklake metadata.
-        FileReference? outputContent = null;
-
-        if (transformationResult?.Success == true)
-        {
-            var outputTransformation = transformationResult.Value;
-
-            if (outputTransformation.TargetSystemReference is null)
-            {
-                outputTransformation.TargetSystemReference =
-                    new Blackbird.Filters.Shared.SystemReference();
-            }
-
-            outputTransformation.TargetSystemReference.ContentId =
-                updatedBroadcast.Id;
-
-            outputTransformation.TargetSystemReference.ContentName =
-                updatedBroadcast.Subject;
-
-            outputTransformation.TargetSystemReference.SystemName = "Kit";
-            outputTransformation.TargetSystemReference.SystemRef =
-                "https://kit.com/";
-
-            outputTransformation.TargetLanguage = input.TargetLanguage;
-
-            if (transformationResult.WasBilingual)
-            {
-                using var stream = outputTransformation.ToStream();
-
-                outputContent = await fileManagementClient.UploadAsync(
-                    stream,
-                    "application/xliff+xml",
-                    outputTransformation.BilingualFileName);
-            }
-            else
-            {
-                var targetResult = outputTransformation.Target();
-
-                if (!targetResult.Success)
-                    throw new PluginApplicationException(
-                        $"Could not reconstruct localized content: {targetResult.Error}");
-
-                var target = targetResult.Value;
-
-                target.SystemReference =
-                    outputTransformation.TargetSystemReference;
-
-                using var stream = target.ToStream();
-
-                outputContent = await fileManagementClient.UploadAsync(
-                    stream,
-                    target.OriginalMediaType,
-                    target.OriginalName);
-            }
-        }
-        else
-        {
-            outputContent = input.Content;
-        }
-
-        return new CreateLocalizedBroadcastResponse
-        {
-            Broadcast = updatedBroadcast,
-            Content = outputContent,
-            TargetLanguage = input.TargetLanguage
-        };
+        return new() { Broadcast = broadcast, Content = file };
     }
 
-    [Action("Update a broadcast",
-    Description = "Update an existing Kit broadcast as a draft")]
-    public async Task<BroadcastDto> UpdateBroadcast(
-    [ActionParameter] UpdateBroadcastRequest input)
-    {
-        var html = await ReadHtmlFile(input.Content);
-
-        var dto = new UpdateBroadcastDto
-        {
-            Subject = input.Subject,
-            Content = html,
-            PreviewText = input.PreviewText,
-            Description = input.Description
-        };
-
-        var endpoint = $"broadcasts/{input.BroadcastId}";
-        var request = new KitRequest(endpoint, Method.Put, Creds);
-        request.AddJsonBody(dto);
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetBroadcastResponse>(request);
-
-        if (response.Broadcast is null)
-        {
-            throw new PluginApplicationException(
-                "Kit returned an empty broadcast response.");
-        }
-
-        return response.Broadcast;
-    }
-
-    [Action("Delete a broadcast",
-            Description = "Delete a specified Kit broadcast")]
+    [Action("Delete broadcast", Description = "Delete a Kit broadcast")]
     public async Task DeleteBroadcast([ActionParameter] BroadcastRequest input)
     {
-        var endpoint = $"broadcasts/{input.BroadcastId}";
-        var request = new KitRequest(endpoint, Method.Delete, Creds);
-
+        var request = new KitRequest($"broadcasts/{input.BroadcastId}", Method.Delete, Creds);
         await Client.ExecuteWithErrorHandling(request);
     }
 
-    [Action("Download broadcast",
-        Description = "Download Kit broadcast content with Blackbird interoperability metadata")]
-    public async Task<DownloadBroadcastResponse> DownloadBroadcast(
-        [ActionParameter] DownloadBroadcastRequest input)
+    [Action("Update broadcast", Description = "Update an existing Kit broadcast from an HTML file and keep it as a draft")]
+    public async Task<BroadcastResponse> UpdateBroadcast([ActionParameter] UpdateBroadcastRequest input)
     {
-        var broadcast = await GetBroadcast(new BroadcastRequest
+        var payload = new BroadcastPayloadDto
         {
-            BroadcastId = input.BroadcastId
-        });
-
-        if (string.IsNullOrWhiteSpace(broadcast.Content))
-        {
-            throw new PluginApplicationException(
-                "This broadcast has no HTML content.");
-        }
-
-        var html = BroadcastHtmlHelper.PrepareHtml(
-            broadcast,
-            input.SourceLanguage);
-
-        var bytes = Encoding.UTF8.GetBytes(html);
-        using var stream = new MemoryStream(bytes);
-
-        var file = await fileManagementClient.UploadAsync(
-            stream,
-            "text/html",
-            $"broadcast-{broadcast.Id}.html");
-
-        return new DownloadBroadcastResponse
-        {
-            Content = file
+            Subject = input.Subject,
+            Content = await fileManagementClient.DownloadStringAsync(input.Content),
+            PreviewText = input.PreviewText,
+            Description = input.Description
         };
+
+        return await PutBroadcast(input.BroadcastId, payload);
     }
 
-    [Action("Search broadcasts",
-        Description = "Search available Kit broadcasts")]
-    public async Task<List<BroadcastDto>> SearchBroadcasts(
-        [ActionParameter] SearchBroadcastsRequest input)
+    private async Task<BroadcastResponse> CreateLocalizedBroadcast(ProcessedBroadcastHtml translated, string targetLanguage)
     {
-        var endpoint = "broadcasts";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
+        var source = await GetBroadcastById(translated.SourceBroadcastId!);
+        var description = string.IsNullOrWhiteSpace(source.Description)
+            ? $"[{targetLanguage}]"
+            : $"{source.Description} [{targetLanguage}]";
 
-        AddSearchParameters(request, input);
-
-        var response =
-            await Client.ExecuteWithErrorHandling<SearchBroadcastsResponse>(request);
-
-        var broadcasts = response.Broadcasts.ToList();
-
-        while (response.Pagination?.HasNextPage == true &&
-               response.Pagination.EndCursor is not null)
-        {
-            var nextRequest = new KitRequest(endpoint, Method.Get, Creds);
-
-            AddSearchParameters(nextRequest, input);
-
-            nextRequest.AddQueryParameter(
-                "after",
-                response.Pagination.EndCursor);
-
-            response =
-                await Client.ExecuteWithErrorHandling<SearchBroadcastsResponse>(nextRequest);
-
-            broadcasts.AddRange(response.Broadcasts);
-        }
-
-        return broadcasts;
+        return await PostBroadcast(ToPayload(translated, description));
     }
 
-    private void AddSearchParameters(
-        KitRequest request,
-        SearchBroadcastsRequest input)
+    private async Task<BroadcastResponse> UpdateLocalizedBroadcast(
+        string broadcastId,
+        ProcessedBroadcastHtml translated,
+        InteroperableHtmlContent content)
     {
-        request.AddQueryParameter("per_page", 1000);
-        request.AddQueryParameter("slim", true);
+        EnsureTargetIsNotSource(broadcastId, translated, content);
 
-        if (!string.IsNullOrEmpty(input.Status))
-        {
-            request.AddQueryParameter("status", input.Status);
-        }
+        var existing = await GetBroadcastById(broadcastId);
+        if (!string.Equals(existing.Status, BroadcastStatuses.Draft, StringComparison.OrdinalIgnoreCase))
+            throw new PluginMisconfigurationException("Only draft broadcasts can be updated.");
 
-        if (input.SentAfter.HasValue)
-        {
-            request.AddQueryParameter(
-                "sent_after",
-                input.SentAfter.Value.ToString("yyyy-MM-dd"));
-        }
-
-        if (input.SentBefore.HasValue)
-        {
-            request.AddQueryParameter(
-                "sent_before",
-                input.SentBefore.Value.ToString("yyyy-MM-dd"));
-        }
+        return await PutBroadcast(broadcastId, ToPayload(translated, existing.Description));
     }
 
-    private async Task<string> ReadHtmlFile(FileReference content)
+    private async Task<BroadcastResponse> GetBroadcastById(string broadcastId)
     {
-        var file = await fileManagementClient.DownloadAsync(content);
-        var bytes = await file.GetByteData();
-
-        return Encoding.UTF8.GetString(bytes);
+        var request = new KitRequest($"broadcasts/{broadcastId}", Method.Get, Creds);
+        return await ExecuteBroadcastRequest(request);
     }
 
-    private async Task<InteroperableHtmlContent> ReadInteroperableHtmlFile(
-        FileReference content)
+    private async Task<BroadcastResponse> PostBroadcast(BroadcastPayloadDto payload)
     {
-        var file = await fileManagementClient.DownloadAsync(content);
+        var request = new KitRequest("broadcasts", Method.Post, Creds).WithJsonBody(payload);
+        return await ExecuteBroadcastRequest(request);
+    }
 
-        var transformationResult = Transformation.Load(
-            file,
-            content.Name,
-            content.ContentType);
+    private async Task<BroadcastResponse> PutBroadcast(string broadcastId, BroadcastPayloadDto payload)
+    {
+        var request = new KitRequest($"broadcasts/{broadcastId}", Method.Put, Creds).WithJsonBody(payload);
+        return await ExecuteBroadcastRequest(request);
+    }
 
-        if (transformationResult.Success)
-        {
-            var targetResult = transformationResult.Target();
+    private async Task<BroadcastResponse> ExecuteBroadcastRequest(RestRequest request)
+    {
+        var response = await Client.ExecuteWithErrorHandling<BroadcastEnvelopeDto>(request);
+        return response.Broadcast ?? throw new PluginApplicationException("Kit returned an empty broadcast response.");
+    }
 
-            if (!targetResult.Success)
-            {
-                throw new PluginApplicationException(
-                    $"Could not extract translated content: {targetResult.Error}");
-            }
+    private static BroadcastPayloadDto ToPayload(ProcessedBroadcastHtml translated, string? description) => new()
+    {
+        Subject = translated.Subject!,
+        PreviewText = translated.PreviewText,
+        Description = description,
+        Content = translated.Html
+    };
 
-            using var targetStream = targetResult.Value.ToStream();
-            using var targetReader = new StreamReader(targetStream);
+    private static void ValidateTranslatedHtml(ProcessedBroadcastHtml translated)
+    {
+        if (string.IsNullOrWhiteSpace(translated.SourceBroadcastId))
+            throw new PluginMisconfigurationException("The translated file is missing the original broadcast ID.");
 
-            return new InteroperableHtmlContent
-            {
-                Html = await targetReader.ReadToEndAsync(),
-                TransformationResult = transformationResult
-            };
-        }
+        if (string.IsNullOrWhiteSpace(translated.Subject))
+            throw new PluginMisconfigurationException("The translated file is missing the broadcast subject.");
+    }
 
-        // Regular HTML files are still supported.
-        InvocationContext.Logger?.LogInformation(
-            $"Not a Blackbird interoperable file: {transformationResult.Error}",
-            []);
+    private static void EnsureTargetIsNotSource(
+        string broadcastId,
+        ProcessedBroadcastHtml translated,
+        InteroperableHtmlContent content)
+    {
+        var sourceId = content.Transformation?.SourceSystemReference?.ContentId ?? translated.SourceBroadcastId;
+        if (string.Equals(broadcastId, sourceId, StringComparison.Ordinal))
+            throw new PluginMisconfigurationException("The localized broadcast ID cannot equal the source broadcast ID.");
 
-        using var reader = new StreamReader(file);
-
-        return new InteroperableHtmlContent
-        {
-            Html = await reader.ReadToEndAsync(),
-            TransformationResult = null
-        };
+        var targetId = content.Transformation?.TargetSystemReference?.ContentId;
+        if (!string.IsNullOrWhiteSpace(targetId) && !string.Equals(broadcastId, targetId, StringComparison.Ordinal))
+            throw new PluginMisconfigurationException("The XLIFF target broadcast ID does not match the localized broadcast ID.");
     }
 }

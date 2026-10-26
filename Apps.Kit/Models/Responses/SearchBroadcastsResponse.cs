@@ -1,13 +1,9 @@
-using Newtonsoft.Json;
-using Apps.Kit.Models.Dtos;
+using Blackbird.Applications.Sdk.Common;
 
 namespace Apps.Kit.Models.Responses;
 
 public class SearchBroadcastsResponse
 {
-    [JsonProperty("broadcasts")]
-    public List<BroadcastDto> Broadcasts { get; set; } = [];
-
-    [JsonProperty("pagination")]
-    public PaginationDto? Pagination { get; set; }
+    [Display("Broadcasts")]
+    public List<BroadcastResponse> Broadcasts { get; set; } = [];
 }

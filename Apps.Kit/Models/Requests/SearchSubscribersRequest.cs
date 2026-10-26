@@ -1,16 +1,16 @@
-using Apps.Kit.DataSourceHandlers.EnumDataHandlers;
+using Apps.Kit.DataSourceHandlers.StaticDataHandlers;
 using Blackbird.Applications.Sdk.Common;
-using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
 
 namespace Apps.Kit.Models.Requests;
 
 public class SearchSubscribersRequest
 {
-    [Display("Status"), StaticDataSource(typeof(SubscriberStatusDataHandler))]
+    [Display("Status")]
+    [StaticDataSource(typeof(SubscriberStatusDataHandler))]
     public string? Status { get; set; }
 
-    [Display("Email Address")]
+    [Display("Email address")]
     public string? EmailAddress { get; set; }
 
     [Display("Created after")]

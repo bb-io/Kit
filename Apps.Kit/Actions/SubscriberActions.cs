@@ -1,13 +1,14 @@
 using Apps.Kit.Api;
+using Apps.Kit.Extensions;
 using Apps.Kit.Invocables;
+using Apps.Kit.Models.Dtos;
 using Apps.Kit.Models.Requests;
 using Apps.Kit.Models.Responses;
-using Apps.Kit.Models.Dtos;
-using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common;
+using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
-using Blackbird.Applications.Sdk.Utils.Extensions.Http;
 using Blackbird.Applications.Sdk.Common.Invocation;
+using Blackbird.Applications.Sdk.Utils.Extensions.Http;
 using RestSharp;
 
 namespace Apps.Kit.Actions;
@@ -15,304 +16,125 @@ namespace Apps.Kit.Actions;
 [ActionList("Subscribers")]
 public class SubscriberActions(InvocationContext invocationContext) : KitInvocable(invocationContext)
 {
-    [Action("Get subscriber",
-            Description = "Get a subscriber by ID")]
-    public async Task<SubscriberDto> GetSubscriber([ActionParameter] SubscriberRequest input)
+    [Action("Search subscribers", Description = "Search Kit subscribers by status, email address and dates")]
+    public async Task<SearchSubscribersResponse> SearchSubscribers([ActionParameter] SearchSubscribersRequest input)
     {
-        var endpoint = $"subscribers/{input.SubscriberId}";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
+        var request = new KitRequest("subscribers", Method.Get, Creds)
+            .AddOptionalQueryParameter("status", input.Status)
+            .AddOptionalQueryParameter("email_address", input.EmailAddress)
+            .AddOptionalDateQueryParameter("created_after", input.CreatedAfter)
+            .AddOptionalDateQueryParameter("created_before", input.CreatedBefore)
+            .AddOptionalDateQueryParameter("updated_after", input.UpdatedAfter)
+            .AddOptionalDateQueryParameter("updated_before", input.UpdatedBefore);
 
-        var response = await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(request);
+        var subscribers = await Client.Paginate<SubscriberListDto, SubscriberResponse>(request);
 
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException("Kit returned an empty subscriber response.");
-        }
-
-        return response.Subscriber;
+        return new() { Subscribers = subscribers };
     }
 
-    [Action("Create subscriber",
-        Description = "Create a new subscriber or update an existing subscriber with the same email address")]
-    public async Task<SubscriberDto> CreateSubscriber(
-        [ActionParameter] CreateSubscriberRequest input)
+    [Action("Get subscriber", Description = "Get details of a Kit subscriber")]
+    public Task<SubscriberResponse> GetSubscriber([ActionParameter] SubscriberRequest input) =>
+        GetSubscriberById(input.SubscriberId);
+
+    [Action("Get subscriber tags", Description = "Get all tags of a Kit subscriber")]
+    public async Task<GetSubscriberTagsResponse> GetSubscriberTags([ActionParameter] SubscriberRequest input)
     {
-        var endpoint = "subscribers";
-        var dto = new CreateSubscriberDto
+        var request = new KitRequest($"subscribers/{input.SubscriberId}/tags", Method.Get, Creds);
+        var tags = await Client.Paginate<SubscriberTagListDto, SubscriberTagResponse>(request);
+
+        return new() { Tags = tags };
+    }
+
+    [Action("Get subscriber stats", Description = "Get email engagement statistics of a Kit subscriber")]
+    public async Task<SubscriberStatsResponse> GetSubscriberStats([ActionParameter] GetSubscriberStatsRequest input)
+    {
+        var request = new KitRequest($"subscribers/{input.SubscriberId}/stats", Method.Get, Creds)
+            .AddOptionalDateQueryParameter("email_sent_after", input.SentAfter)
+            .AddOptionalDateQueryParameter("email_sent_before", input.SentBefore);
+
+        var response = await Client.ExecuteWithErrorHandling<SubscriberStatsEnvelopeDto>(request);
+
+        return response.Subscriber ?? throw new PluginApplicationException("Kit returned an empty subscriber stats response.");
+    }
+
+    [Action("Create subscriber", Description = "Create a new subscriber or update an existing subscriber with the same email address")]
+    public Task<SubscriberResponse> CreateSubscriber([ActionParameter] CreateSubscriberRequest input)
+    {
+        var payload = new CreateSubscriberDto
         {
             EmailAddress = input.EmailAddress,
             FirstName = input.FirstName,
             State = input.State
         };
-        var request = new KitRequest(endpoint, Method.Post, Creds).WithJsonBody(dto);
 
-        var response = await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(request);
+        var request = new KitRequest("subscribers", Method.Post, Creds).WithJsonBody(payload);
 
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException("Kit was unable to create or update the subscriber.");
-        }
-
-        return response.Subscriber;
+        return ExecuteSubscriberRequest(request);
     }
 
-    [Action("Update subscriber",
-        Description = "Update an existing subscriber")]
-    public async Task<SubscriberDto> UpdateSubscriber(
-        [ActionParameter] UpdateSubscriberRequest input)
+    [Action("Add tag to subscriber", Description = "Apply a Kit tag to a subscriber")]
+    public Task<SubscriberResponse> AddTagToSubscriber([ActionParameter] TagSubscriberRequest input)
     {
-        var endpoint = $"subscribers/{input.SubscriberId}";
-        var emailAddress = input.EmailAddress;
+        var request = new KitRequest($"tags/{input.TagId}/subscribers/{input.SubscriberId}", Method.Post, Creds);
+        return ExecuteSubscriberRequest(request);
+    }
 
-        if (string.IsNullOrEmpty(emailAddress))
+    [Action("Delete tag from subscriber", Description = "Remove a Kit tag from a subscriber")]
+    public async Task DeleteTagFromSubscriber([ActionParameter] TagSubscriberRequest input)
+    {
+        var request = new KitRequest($"tags/{input.TagId}/subscribers/{input.SubscriberId}", Method.Delete, Creds);
+        await Client.ExecuteWithErrorHandling(request);
+    }
+
+    [Action("Update subscriber", Description = "Update the email address or first name of a Kit subscriber")]
+    public async Task<SubscriberResponse> UpdateSubscriber([ActionParameter] UpdateSubscriberRequest input)
+    {
+        var payload = new UpdateSubscriberDto
         {
-            var getRequest = new KitRequest(
-                $"subscribers/{input.SubscriberId}",
-                Method.Get,
-                Creds);
-
-            var getResponse =
-                await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(getRequest);
-
-            if (getResponse.Subscriber is null)
-            {
-                throw new PluginApplicationException(
-                    "Kit returned an empty subscriber response.");
-            }
-
-            emailAddress = getResponse.Subscriber.EmailAddress;
-        }
-
-        var dto = new UpdateSubscriberDto
-        {
-            EmailAddress = emailAddress,
+            EmailAddress = string.IsNullOrEmpty(input.EmailAddress)
+                ? (await GetSubscriberById(input.SubscriberId)).EmailAddress
+                : input.EmailAddress,
             FirstName = input.FirstName
         };
-        var request = new KitRequest(endpoint, Method.Put, Creds).WithJsonBody(dto);
 
-        var response = await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(request);
-
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException("Kit was unable to update the subscriber.");
-        }
-
-        return response.Subscriber;
+        return await PutSubscriber(input.SubscriberId, payload);
     }
 
-    [Action("Update subscriber custom field",
-        Description = "Update a custom field on an existing subscriber")]
-    public async Task<SubscriberDto> UpdateSubscriberCustomField(
-        [ActionParameter] UpdateSubscriberCustomFieldRequest input)
+    [Action("Update subscriber custom field", Description = "Update a custom field value of a Kit subscriber")]
+    public async Task<SubscriberResponse> UpdateSubscriberCustomField([ActionParameter] UpdateSubscriberCustomFieldRequest input)
     {
-        var endpoint = $"subscribers/{input.SubscriberId}";
-
-        // Kit requires an email address when updating a subscriber.
-        var getRequest = new KitRequest(endpoint, Method.Get, Creds);
-
-        var getResponse =
-            await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(getRequest);
-
-        if (getResponse.Subscriber is null)
+        var subscriber = await GetSubscriberById(input.SubscriberId);
+        var payload = new UpdateSubscriberDto
         {
-            throw new PluginApplicationException(
-                "Kit returned an empty subscriber response.");
-        }
-
-        var dto = new UpdateSubscriberDto
-        {
-            EmailAddress = getResponse.Subscriber.EmailAddress,
-            Fields = new Dictionary<string, string>
-            {
-                { input.CustomField, input.Value }
-            }
+            EmailAddress = subscriber.EmailAddress,
+            Fields = new() { [input.CustomField] = input.Value }
         };
 
-        var request = new KitRequest(endpoint, Method.Put, Creds)
-            .WithJsonBody(dto);
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(request);
-
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException(
-                "Kit was unable to update the subscriber custom field.");
-        }
-
-        return response.Subscriber;
+        return await PutSubscriber(input.SubscriberId, payload);
     }
 
-    [Action("Unsubscribe subscriber",
-           Description = "Unsubscribe a subscriber using an ID")]
+    [Action("Unsubscribe subscriber", Description = "Unsubscribe a Kit subscriber from all emails")]
     public async Task UnsubscribeSubscriber([ActionParameter] SubscriberRequest input)
     {
-        var endpoint = $"subscribers/{input.SubscriberId}/unsubscribe";
-        var request = new KitRequest(endpoint, Method.Post, Creds);
-
+        var request = new KitRequest($"subscribers/{input.SubscriberId}/unsubscribe", Method.Post, Creds);
         await Client.ExecuteWithErrorHandling(request);
     }
 
-    [Action("Get subscriber tags",
-        Description = "Get all tags for a subscriber")]
-    public async Task<List<SubscriberTagDto>> GetSubscriberTags(
-        [ActionParameter] SubscriberRequest input)
+    private Task<SubscriberResponse> GetSubscriberById(string subscriberId)
     {
-        var endpoint = $"subscribers/{input.SubscriberId}/tags";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
-        request.AddQueryParameter("per_page", 1000);
-
-        var tags = new List<SubscriberTagDto>();
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetSubscriberTagsResponse>(request);
-
-        tags.AddRange(response.Tags);
-
-        while (response.Pagination?.HasNextPage == true &&
-               response.Pagination.EndCursor is not null)
-        {
-            var nextRequest = new KitRequest(endpoint, Method.Get, Creds);
-
-            nextRequest.AddQueryParameter("per_page", 1000);
-            nextRequest.AddQueryParameter(
-                "after",
-                response.Pagination.EndCursor);
-
-            response =
-                await Client.ExecuteWithErrorHandling<GetSubscriberTagsResponse>(nextRequest);
-
-            tags.AddRange(response.Tags);
-        }
-
-        return tags;
+        var request = new KitRequest($"subscribers/{subscriberId}", Method.Get, Creds);
+        return ExecuteSubscriberRequest(request);
     }
 
-    [Action("Tag subscriber",
-            Description = "Apply a tag to a subscriber")]
-    public async Task<SubscriberDto> TagSubscriber(
-            [ActionParameter] TagSubscriberRequest input)
+    private Task<SubscriberResponse> PutSubscriber(string subscriberId, UpdateSubscriberDto payload)
     {
-        var endpoint = $"tags/{input.TagId}/subscribers/{input.SubscriberId}";
-        var request = new KitRequest(endpoint, Method.Post, Creds);
-
-        var response = await Client.ExecuteWithErrorHandling<GetSubscriberResponse>(request);
-
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException("Kit was not able to add this tag to this subscriber.");
-        }
-
-        return response.Subscriber;
+        var request = new KitRequest($"subscribers/{subscriberId}", Method.Put, Creds).WithJsonBody(payload);
+        return ExecuteSubscriberRequest(request);
     }
 
-    [Action("Remove tag from subscriber",
-            Description = "Remove a tag from a subscriber")]
-    public async Task RemoveTagFromSubscriber(
-            [ActionParameter] TagSubscriberRequest input)
+    private async Task<SubscriberResponse> ExecuteSubscriberRequest(RestRequest request)
     {
-        var endpoint = $"tags/{input.TagId}/subscribers/{input.SubscriberId}";
-        var request = new KitRequest(endpoint, Method.Delete, Creds);
-
-        await Client.ExecuteWithErrorHandling(request);
-    }
-
-    [Action("Get subscriber stats",
-            Description = "Get email engagement statistics for a subscriber")]
-    public async Task<SubscriberStatsDto> GetSubscriberStats(
-            [ActionParameter] GetSubscriberStatsRequest input)
-    {
-        var endpoint = $"subscribers/{input.SubscriberId}/stats";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
-
-        if (input.SentAfter.HasValue)
-        {
-            request.AddQueryParameter(
-                "email_sent_after",
-                input.SentAfter.Value.ToString("yyyy-MM-dd"));
-        }
-
-        if (input.SentBefore.HasValue)
-        {
-            request.AddQueryParameter(
-                "email_sent_before",
-                input.SentBefore.Value.ToString("yyyy-MM-dd"));
-        }
-
-        var response =
-            await Client.ExecuteWithErrorHandling<GetSubscriberStatsResponse>(request);
-
-        if (response.Subscriber is null)
-        {
-            throw new PluginApplicationException(
-                "Kit returned an empty subscriber stats response.");
-        }
-
-        return response.Subscriber;
-    }
-
-    [Action("Search subscribers",
-            Description = "Search for subscribers")]
-    public async Task<SearchSubscribersResponse> SearchSubscribers([ActionParameter] SearchSubscribersRequest input)
-    {
-        var endpoint = "subscribers";
-        var request = new KitRequest(endpoint, Method.Get, Creds);
-
-        AddSearchParameters(request, input);
-
-        var response = await Client.ExecuteWithErrorHandling<SearchSubscribersResponse>(request);
-        var subscribers = response.Subscribers.ToList();
-
-        while (response.Pagination?.HasNextPage == true &&
-            response.Pagination?.EndCursor is not null)
-        {
-            var nextRequest = new KitRequest(endpoint, Method.Get, Creds);
-
-            AddSearchParameters(nextRequest, input);
-
-            nextRequest.AddQueryParameter(
-                "after",
-                response.Pagination.EndCursor);
-
-            var nextResponse = await Client.ExecuteWithErrorHandling<SearchSubscribersResponse>(nextRequest);
-            subscribers.AddRange(nextResponse.Subscribers);
-            response = nextResponse;
-        }
-
-        response.Subscribers = subscribers;
-        return response;
-    }
-
-    private void AddSearchParameters(KitRequest request, SearchSubscribersRequest input)
-    {
-        if (!string.IsNullOrEmpty(input.Status))
-        {
-            request.AddQueryParameter("status", input.Status);
-        }
-
-        if (!string.IsNullOrEmpty(input.EmailAddress))
-        {
-            request.AddQueryParameter("email_address", input.EmailAddress);
-        }
-
-        if (input.CreatedAfter.HasValue)
-        {
-            request.AddQueryParameter("created_after", input.CreatedAfter.Value.ToString("yyyy-MM-dd"));
-        }
-
-        if (input.CreatedBefore.HasValue)
-        {
-            request.AddQueryParameter("created_before", input.CreatedBefore.Value.ToString("yyyy-MM-dd"));
-        }
-
-        if (input.UpdatedAfter.HasValue)
-        {
-            request.AddQueryParameter("updated_after", input.UpdatedAfter.Value.ToString("yyyy-MM-dd"));
-        }
-
-        if (input.UpdatedBefore.HasValue)
-        {
-            request.AddQueryParameter("updated_before", input.UpdatedBefore.Value.ToString("yyyy-MM-dd"));
-        }
+        var response = await Client.ExecuteWithErrorHandling<SubscriberEnvelopeDto>(request);
+        return response.Subscriber ?? throw new PluginApplicationException("Kit returned an empty subscriber response.");
     }
 }
