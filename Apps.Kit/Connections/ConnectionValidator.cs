@@ -11,6 +11,7 @@ public class ConnectionValidator : IConnectionValidator
     private static readonly HttpStatusCode[] InvalidConnectionStatusCodes =
     [
         HttpStatusCode.Unauthorized,
+        HttpStatusCode.Forbidden,
         HttpStatusCode.NotFound
     ];
 
