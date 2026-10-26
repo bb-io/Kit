@@ -41,7 +41,7 @@ public static class BroadcastHtmlHelper
 
         var sourceBroadcastId = document.DocumentNode
             .SelectSingleNode($"//meta[@name='{BlackbirdMetadata.Ucid}']")
-            ?.GetAttributeValue("content", null);
+            ?.GetAttributeValue("content", null!);
 
         var subject = ExtractTranslatableField(document, BlackbirdMetadata.SubjectFieldId);
         var previewText = ExtractTranslatableField(document, BlackbirdMetadata.PreviewTextFieldId);
@@ -152,7 +152,7 @@ public static class BroadcastHtmlHelper
 
         node.Remove();
 
-        return HtmlEntity.DeEntitize(node.InnerText).Trim();
+        return HtmlEntity.DeEntitize(node.InnerText)!.Trim();
     }
 
     private static void RemoveBlackbirdMetadata(HtmlDocument document)
