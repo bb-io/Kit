@@ -17,7 +17,7 @@ public class BroadcastDataHandler(InvocationContext invocationContext)
         var broadcasts = await Client.Paginate<BroadcastListDto, BroadcastResponse>(request);
 
         return broadcasts
-            .Select(broadcast => new DataSourceItem(broadcast.Id, $"{broadcast.Subject} ({broadcast.Id})"))
+            .Select(broadcast => new DataSourceItem(broadcast.ContentId, $"{broadcast.Subject} ({broadcast.ContentId})"))
             .Where(item => string.IsNullOrEmpty(context.SearchString)
                 || item.DisplayName.Contains(context.SearchString, StringComparison.OrdinalIgnoreCase));
     }

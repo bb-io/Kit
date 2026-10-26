@@ -1,13 +1,14 @@
 using Blackbird.Applications.Sdk.Common;
+using Blackbird.Applications.SDK.Blueprints.Interfaces.CMS;
 using Newtonsoft.Json;
 
 namespace Apps.Kit.Models.Responses;
 
-public class BroadcastResponse
+public class BroadcastResponse : IDownloadContentInput
 {
     [Display("Broadcast ID")]
     [JsonProperty("id")]
-    public string Id { get; set; } = string.Empty;
+    public string ContentId { get; set; } = string.Empty;
 
     [Display("Publication ID")]
     [JsonProperty("publication_id")]

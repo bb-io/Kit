@@ -9,6 +9,6 @@ public static class PollingResponseFactory
     {
         FlyBird = items.Count > 0,
         Memory = new() { LastPollingTime = pollingTime },
-        Result = items
+        Result = items.Count > 0 ? items : null
     };
 }

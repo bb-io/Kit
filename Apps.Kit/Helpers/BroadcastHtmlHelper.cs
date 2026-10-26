@@ -102,7 +102,7 @@ public static class BroadcastHtmlHelper
 
     private static void AddMetadata(HtmlNode head, BroadcastResponse broadcast)
     {
-        SetMeta(head, BlackbirdMetadata.Ucid, broadcast.Id);
+        SetMeta(head, BlackbirdMetadata.Ucid, broadcast.ContentId);
         SetMeta(head, BlackbirdMetadata.ContentName, broadcast.Subject);
         SetMeta(head, BlackbirdMetadata.SystemName, SystemReferences.SystemName);
         SetMeta(head, BlackbirdMetadata.SystemRef, SystemReferences.SystemRef);

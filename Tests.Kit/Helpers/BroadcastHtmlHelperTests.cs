@@ -13,7 +13,7 @@ public class BroadcastHtmlHelperTests
     {
         var broadcast = new BroadcastResponse
         {
-            Id = "12345",
+            ContentId = "12345",
             Subject = "October Newsletter",
             PublicUrl = "https://example.com/newsletter",
             Content = "<html><head></head><body><p>Hello!</p></body></html>"
@@ -54,7 +54,7 @@ public class BroadcastHtmlHelperTests
     {
         var broadcast = new BroadcastResponse
         {
-            Id = "67890",
+            ContentId = "67890",
             Subject = "Test Broadcast",
             Content = "<h1>Welcome</h1><p>Thanks for subscribing.</p>"
         };
@@ -84,7 +84,7 @@ public class BroadcastHtmlHelperTests
     {
         var broadcast = new BroadcastResponse
         {
-            Id = "99999",
+            ContentId = "99999",
             Subject = "Updated Newsletter",
             Content = """
                 <html>
@@ -126,7 +126,7 @@ public class BroadcastHtmlHelperTests
         // Arrange
         var broadcast = new BroadcastResponse
         {
-            Id = "12345",
+            ContentId = "12345",
             Subject = "October Newsletter",
             PreviewText = "Check out our latest updates",
             Content = "<p>Hello subscribers!</p>"
@@ -216,7 +216,7 @@ public class BroadcastHtmlHelperTests
         // Arrange: original English broadcast.
         var broadcast = new BroadcastResponse
         {
-            Id = "12345",
+            ContentId = "12345",
             Subject = "October Newsletter",
             PreviewText = "Latest updates",
             Content = "<p>Hello subscribers!</p>"

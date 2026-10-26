@@ -35,7 +35,7 @@ public class BroadcastActionsTests : TestBase
 
         var result = await actions.GetBroadcast(request);
 
-        Assert.AreEqual(request.BroadcastId, result.Id);
+        Assert.AreEqual(request.BroadcastId, result.ContentId);
         Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
     }
 
@@ -54,7 +54,7 @@ public class BroadcastActionsTests : TestBase
 
         var result = await actions.CreateBroadcast(request);
 
-        Assert.IsFalse(string.IsNullOrEmpty(result.Id));
+        Assert.IsFalse(string.IsNullOrEmpty(result.ContentId));
         Assert.AreEqual(BroadcastStatuses.Draft, result.Status);
     }
 
@@ -87,7 +87,7 @@ public class BroadcastActionsTests : TestBase
             Locale = "de-DE"
         });
 
-        Assert.AreNotEqual(SourceBroadcastId, result.Broadcast.Id);
+        Assert.AreNotEqual(SourceBroadcastId, result.Broadcast.ContentId);
         Assert.AreEqual(BroadcastStatuses.Draft, result.Broadcast.Status);
         Assert.AreEqual("Integrationstest-Newsletter", result.Broadcast.Subject);
         StringAssert.EndsWith(result.Broadcast.Description, "[de-DE]");
@@ -109,7 +109,7 @@ public class BroadcastActionsTests : TestBase
         });
 
         var updated = await actions.GetBroadcast(new BroadcastRequest { BroadcastId = LocalizedBroadcastId });
-        Assert.AreEqual(LocalizedBroadcastId, result.Broadcast.Id);
+        Assert.AreEqual(LocalizedBroadcastId, result.Broadcast.ContentId);
         Assert.AreEqual(existing.Description, updated.Description);
         StringAssert.Contains(updated.Content, "Dies ist die aktualisierte deutsche Version.");
     }
@@ -169,7 +169,7 @@ public class BroadcastActionsTests : TestBase
 
         var result = await actions.UpdateBroadcast(request);
 
-        Assert.AreEqual(request.BroadcastId, result.Id);
+        Assert.AreEqual(request.BroadcastId, result.ContentId);
         Assert.AreEqual(request.Subject, result.Subject);
         Assert.IsFalse(result.Public);
     }

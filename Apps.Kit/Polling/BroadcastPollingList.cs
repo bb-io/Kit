@@ -8,6 +8,7 @@ using Apps.Kit.Polling.Memory;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Common.Polling;
+using Blackbird.Applications.SDK.Blueprints;
 using RestSharp;
 
 namespace Apps.Kit.Polling;
@@ -17,6 +18,7 @@ public class BroadcastPollingList(InvocationContext invocationContext) : KitInvo
 {
     private const int SentAfterBufferDays = 1;
 
+    [BlueprintEventDefinition(BlueprintEvent.ContentCreatedOrUpdated)]
     [PollingEvent("On broadcast published", Description = "Triggers when a Kit broadcast is published to the web")]
     [MultipleEvents]
     public async Task<PollingEventResponse<PollingMemory, List<BroadcastResponse>>> OnBroadcastPublished(

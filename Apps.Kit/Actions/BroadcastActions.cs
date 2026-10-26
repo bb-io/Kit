@@ -61,7 +61,7 @@ public class BroadcastActions(InvocationContext invocationContext, IFileManageme
     {
         var broadcast = await GetBroadcastById(input.ContentId);
         var html = BroadcastHtmlHelper.PrepareHtml(broadcast, input.SourceLanguage);
-        var file = await fileManagementClient.UploadStringAsync(html, MediaTypeNames.Text.Html, $"broadcast-{broadcast.Id}.html");
+        var file = await fileManagementClient.UploadStringAsync(html, MediaTypeNames.Text.Html, $"broadcast-{broadcast.ContentId}.html");
 
         return new() { Content = file };
     }
@@ -84,7 +84,7 @@ public class BroadcastActions(InvocationContext invocationContext, IFileManageme
         var file = await InteroperableFileHelper.UploadWithTargetReferenceAsync(
             fileManagementClient,
             content,
-            broadcast.Id,
+            broadcast.ContentId,
             broadcast.Subject,
             input.Locale,
             input.Content);
