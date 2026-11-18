@@ -8,7 +8,7 @@
     <Product>Kit [Beta]</Product>
     <PackageId>Apps.Kit</PackageId>
     <AssemblyName>Apps.Kit</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,8 +25,7 @@
   </ItemGroup>
 
 <ItemGroup>
-  <EmbeddedResource CopyToOutputDirectory="Always"
-                    Include="..\README.md" />
+  <EmbeddedResource Include="..\README.md" Link="README.md" CopyToOutputDirectory="Always" />
   <None Remove="image\icon.png" />
   <EmbeddedResource Include="image\icon.png">
     <CopyToOutputDirectory>Always</CopyToOutputDirectory>
